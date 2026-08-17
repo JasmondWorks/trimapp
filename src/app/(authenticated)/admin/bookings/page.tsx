@@ -1,23 +1,14 @@
 "use client";
 
 
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useAllBookings } from "@/models/booking/booking.hooks";
 import { Badge } from "@/components/ui/badge";
 import { formatNaira } from "@/lib/format";
 
 export default AdminBookings;
 
 function AdminBookings() {
-  const { data } = useQuery({
-    queryKey: ["admin-bookings"],
-    queryFn: async () => {
-      const { data } = await supabase.from("bookings")
-        .select("id,scheduled_at,status,total_amount,vendors(business_name),services(name)")
-        .order("scheduled_at", { ascending: false });
-      return data ?? [];
-    },
-  });
+  const { bookings: data } = useAllBookings();
 
   return (
     <div>

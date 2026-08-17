@@ -1,32 +1,13 @@
 "use client";
 
 
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { usePlatformOverview } from "@/models/admin/admin.hooks";
 import { formatNaira } from "@/lib/format";
 
 export default AdminOverview;
 
 function AdminOverview() {
-  const { data } = useQuery({
-    queryKey: ["admin-overview"],
-    queryFn: async () => {
-      const [vendors, bookings, orders] = await Promise.all([
-        supabase.from("vendors").select("id,status", { count: "exact" }),
-        supabase.from("bookings").select("id,total_amount"),
-        supabase.from("orders").select("id,total_naira,status"),
-      ]);
-      const gmvBookings = (bookings.data ?? []).reduce((n, b) => n + Number(b.total_amount ?? 0), 0);
-      const gmvOrders = (orders.data ?? []).reduce((n, o) => n + Number(o.total_naira ?? 0), 0);
-      return {
-        vendorsPending: (vendors.data ?? []).filter((v) => v.status === "pending").length,
-        vendorsApproved: (vendors.data ?? []).filter((v) => v.status === "approved").length,
-        bookingsCount: bookings.data?.length ?? 0,
-        ordersCount: orders.data?.length ?? 0,
-        gmv: gmvBookings + gmvOrders,
-      };
-    },
-  });
+  const { overview: data } = usePlatformOverview();
 
   return (
     <div>

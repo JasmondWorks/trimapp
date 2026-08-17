@@ -4,14 +4,18 @@ import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 
-import { useRoles } from "@/hooks/useUser";
-
-type Role = "customer" | "vendor" | "admin";
+import { useRoles } from "@/models/auth/auth.hooks";
+import { SIGN_IN_ROUTE } from "@/models/auth/auth.constants";
+import type { Role } from "@/models/auth/auth.types";
 
 /**
- * Client-side replacement for the TanStack `beforeLoad` guards. The Supabase
- * session lives in browser storage, so the check can only run once mounted —
- * we render a spinner until roles resolve, then redirect if they don't match.
+ * Client-side route guard.
+ *
+ * The session is restored from an httpOnly cookie on mount, so the check can
+ * only run once mounted — we render a spinner until roles resolve, then
+ * redirect if they don't match. `useRoles` reports loading until the session
+ * bootstrap settles, which is what stops a signed-in user being bounced to
+ * /auth on a hard refresh.
  */
 export function RequireRole({
   anyOf,
@@ -25,14 +29,14 @@ export function RequireRole({
   children: ReactNode;
 }) {
   const router = useRouter();
-  const { user, roles, loading } = useRoles();
+  const { user, roles, isLoading: loading } = useRoles();
 
   const allowed = !anyOf || roles.some((r) => anyOf.includes(r));
 
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      router.replace("/auth");
+      router.replace(SIGN_IN_ROUTE);
       return;
     }
     if (!allowed) router.replace(redirectTo);

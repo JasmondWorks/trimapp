@@ -1,23 +1,14 @@
 "use client";
 
 
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useAllOrders } from "@/models/order/order.hooks";
 import { Badge } from "@/components/ui/badge";
 import { formatNaira } from "@/lib/format";
 
 export default AdminOrders;
 
 function AdminOrders() {
-  const { data } = useQuery({
-    queryKey: ["admin-orders"],
-    queryFn: async () => {
-      const { data } = await supabase.from("orders")
-        .select("id,status,total_naira,created_at,delivery_name,delivery_city,delivery_state,user_id")
-        .order("created_at", { ascending: false });
-      return data ?? [];
-    },
-  });
+  const { orders: data } = useAllOrders();
 
   return (
     <div>

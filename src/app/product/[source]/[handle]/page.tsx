@@ -6,13 +6,13 @@ import { useQuery } from "@tanstack/react-query";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
 import {
   storefrontApiRequest,
   PRODUCT_BY_HANDLE_QUERY,
-  useCartStore,
 } from "@/lib/shopify";
-import { useVendorCart } from "@/stores/vendorCart";
+import { useCartStore } from "@/stores/shopifyCart.store";
+import { useVendorCart } from "@/stores/vendorCart.store";
+import { useProduct } from "@/models/product/product.hooks";
 import { formatNaira } from "@/lib/format";
 import { toast } from "sonner";
 import { ShieldCheck } from "lucide-react";
@@ -52,19 +52,7 @@ function ProductDetail() {
     },
   });
 
-  const vendorQ = useQuery({
-    enabled: source === "vendor",
-    queryKey: ["vendor-product", handle],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("vendor_products")
-        .select("*,vendors(business_name,commission_pct,id)")
-        .eq("slug", handle)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-  });
+  const vendorQ = useProduct(handle, source === "vendor");
 
   const addShopify = useCartStore((s) => s.addItem);
   const addVendor = useVendorCart((s) => s.addItem);
@@ -151,7 +139,7 @@ function ProductDetail() {
         <div className="p-8 text-muted-foreground">Loading…</div>
       </>
     );
-  const p = vendorQ.data;
+  const p = vendorQ.product;
   if (!p)
     return (
       <>

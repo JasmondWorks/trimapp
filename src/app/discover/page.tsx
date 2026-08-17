@@ -2,35 +2,21 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
+import { useApprovedVendors } from "@/models/vendor/vendor.hooks";
+import type { VendorCard } from "@/models/vendor/vendor.types";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { NG_STATES } from "@/data/nigeria";
 import { haversineKm } from "@/lib/format";
 import { loadGoogleMaps } from "@/lib/google-maps";
 import { MapPin, Star, ShieldCheck, LayoutGrid, Map as MapIcon } from "lucide-react";
 
-type Vendor = {
-  id: string;
-  business_name: string;
-  category: "barber" | "hairdresser";
-  city: string | null;
-  state: string | null;
-  address: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  service_mode: "in_shop" | "home" | "both";
-  is_verified: boolean;
-  rating: number;
-  reviews_count: number;
-  avatar_url: string | null;
-  cover_url: string | null;
-};
+/** Alias so the local filtering code reads unchanged. */
+type Vendor = VendorCard;
 
 export default function DiscoverPage() {
   const { coords, status, request, setManual } = useGeolocation();
@@ -39,18 +25,7 @@ export default function DiscoverPage() {
   const [category, setCategory] = useState<"all" | "barber" | "hairdresser">("all");
   const [radius, setRadius] = useState<string>("50");
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["vendors-approved"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("vendors")
-        .select("id,business_name,category,city,state,address,latitude,longitude,service_mode,is_verified,rating,reviews_count,avatar_url,cover_url")
-        .eq("status", "approved")
-        .limit(200);
-      if (error) throw error;
-      return data as Vendor[];
-    },
-  });
+  const { vendors: data, isLoading } = useApprovedVendors();
 
   const filtered = useMemo(() => {
     if (!data) return [] as Array<Vendor & { distanceKm: number | null }>;
@@ -146,7 +121,7 @@ export default function DiscoverPage() {
           <p className="text-muted-foreground">Loading vendors…</p>
         ) : filtered.length === 0 ? (
           <div className="rounded-lg border border-border p-10 text-center text-muted-foreground">
-            No approved vendors yet. Once vendors sign up and are approved, they'll appear here.
+            No approved vendors yet. Once vendors sign up and are approved, they&apos;ll appear here.
           </div>
         ) : view === "list" ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

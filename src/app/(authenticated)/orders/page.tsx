@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useMyOrders } from "@/models/order/order.hooks";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Badge } from "@/components/ui/badge";
 import { formatNaira } from "@/lib/format";
@@ -10,21 +9,7 @@ import { formatNaira } from "@/lib/format";
 export default Orders;
 
 function Orders() {
-  const { data, isLoading } = useQuery({
-    queryKey: ["my-orders"],
-    queryFn: async () => {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) return [];
-      const { data } = await supabase
-        .from("orders")
-        .select(
-          "id,status,total_naira,created_at,order_items(id,title,quantity,unit_price,source,seller_vendor_id,fulfillment_status,vendors(business_name))",
-        )
-        .eq("user_id", u.user.id)
-        .order("created_at", { ascending: false });
-      return data ?? [];
-    },
-  });
+  const { orders: data, isLoading } = useMyOrders();
 
   return (
     <div className="min-h-screen bg-background">

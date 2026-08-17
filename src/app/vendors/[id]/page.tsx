@@ -2,9 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,66 +17,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatNaira } from "@/lib/format";
-import { useUser } from "@/hooks/useUser";
+import { useCurrentUser } from "@/models/auth/auth.hooks";
+import { useVendor } from "@/models/vendor/vendor.hooks";
+import { useVendorServices } from "@/models/service/service.hooks";
+import { useReviews } from "@/models/review/review.hooks";
+import { useCreateBooking } from "@/models/booking/booking.hooks";
+import { DEFAULT_BOOKING_TIME } from "@/models/booking/booking.constants";
 import { toast } from "sonner";
 import { ShieldCheck, Star, MapPin, Clock, Loader2 } from "lucide-react";
 
 export default VendorProfile;
 
-type Service = {
-  id: string;
-  name: string;
-  price: number;
-  duration_minutes: number;
-  description: string | null;
-  category: string;
-};
-
 function VendorProfile() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { user } = useUser();
-  const qc = useQueryClient();
+  const { user } = useCurrentUser();
 
-  const { data: vendor, isLoading } = useQuery({
-    queryKey: ["vendor", id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("vendors")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const { data: services } = useQuery({
-    queryKey: ["vendor-services", id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("services")
-        .select("id,name,price,duration_minutes,description,category")
-        .eq("vendor_id", id)
-        .eq("is_active", true);
-      if (error) throw error;
-      return data as Service[];
-    },
-  });
-
-  const { data: reviews } = useQuery({
-    queryKey: ["vendor-reviews", id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("reviews")
-        .select("id,rating,comment,created_at,user_id")
-        .eq("target_type", "vendor")
-        .eq("target_id", id)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      return data ?? [];
-    },
-  });
+  const { vendor, isLoading } = useVendor(id);
+  const { services } = useVendorServices(id);
+  const { reviews } = useReviews("vendor", id);
+  const { createBooking, isBooking } = useCreateBooking();
 
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(
     null,
@@ -86,7 +44,7 @@ function VendorProfile() {
   const [date, setDate] = useState<string>(() =>
     new Date().toISOString().slice(0, 10),
   );
-  const [time, setTime] = useState<string>("10:00");
+  const [time, setTime] = useState<string>(DEFAULT_BOOKING_TIME);
   const [mode, setMode] = useState<"in_shop" | "home">("in_shop");
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
@@ -96,35 +54,27 @@ function VendorProfile() {
     [services, selectedServiceId],
   );
 
-  const booking = useMutation({
-    mutationFn: async () => {
-      if (!user) throw new Error("Please sign in first");
-      if (!selectedService || !vendor) throw new Error("Pick a service");
-      const scheduledAt = new Date(`${date}T${time}:00`).toISOString();
-      const total = selectedService.price;
-      const commission = Math.round((total * vendor.commission_pct) / 100);
-      const { error } = await supabase.from("bookings").insert({
-        user_id: user.id,
-        vendor_id: vendor.id,
-        service_id: selectedService.id,
-        scheduled_at: scheduledAt,
+  const handleBook = async () => {
+    if (!user) return toast.error("Please sign in first");
+    if (!selectedService || !vendor) return toast.error("Pick a service");
+    try {
+      // Price and commission are computed server-side from the service and
+      // vendor rows, so nothing about the amount is sent from here.
+      await createBooking({
+        vendorId: vendor.id,
+        serviceId: selectedService.id,
+        date,
+        time,
         mode,
-        address: mode === "home" ? address : null,
-        total_amount: total,
-        commission_amount: commission,
-        payment_status: "pending",
-        status: "pending",
-        notes: notes || null,
+        address: mode === "home" ? address : undefined,
+        notes,
       });
-      if (error) throw error;
-    },
-    onSuccess: () => {
       toast.success("Booking requested. The vendor will confirm.");
-      qc.invalidateQueries({ queryKey: ["my-bookings"] });
       router.push("/bookings");
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  };
 
   if (isLoading)
     return (
@@ -376,18 +326,18 @@ function VendorProfile() {
                   />
                 </div>
                 <Button
-                  disabled={!selectedService || booking.isPending}
-                  onClick={() => booking.mutate()}
+                  disabled={!selectedService || isBooking}
+                  onClick={() => void handleBook()}
                   className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
                 >
-                  {booking.isPending ? (
+                  {isBooking ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     "Request booking"
                   )}
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  You'll pay after the vendor confirms. Paystack coming soon.
+                  You&apos;ll pay after the vendor confirms. Paystack coming soon.
                 </p>
               </div>
             )}

@@ -1,13 +1,26 @@
-import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+"use client";
 
+import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
+
+import { VENDOR_CART_STORAGE_KEY } from "./cart.constants";
+
+/**
+ * Vendor-product cart.
+ *
+ * Purely local — vendor items have no remote cart, so this is the source of
+ * truth until checkout. Prices held here are for display only: the checkout
+ * action re-reads every price from the database, so a tampered cart cannot
+ * change what the customer is charged.
+ */
 export interface VendorCartItem {
   productId: string;
   vendorId: string;
   vendorName: string;
   title: string;
   imageUrl: string | null;
-  unitPrice: number; // Naira
+  /** Naira. */
+  unitPrice: number;
   quantity: number;
   commissionPct: number;
 }
@@ -54,8 +67,19 @@ export const useVendorCart = create<VendorCartStore>()(
       totalNaira: () => get().items.reduce((n, i) => n + i.unitPrice * i.quantity, 0),
     }),
     {
-      name: "trimapp-vendor-cart",
+      name: VENDOR_CART_STORAGE_KEY,
       storage: createJSONStorage(() => localStorage),
     },
   ),
 );
+
+/**
+ * The lines the checkout action accepts — ids and quantities only.
+ *
+ * A plain mapper, deliberately *not* a zustand selector: it builds a new array
+ * each call, and zustand v5 passes selectors straight to useSyncExternalStore,
+ * where an unstable snapshot causes an infinite render loop. Call it inside a
+ * `useMemo` over `items` instead.
+ */
+export const toCheckoutLines = (items: VendorCartItem[]) =>
+  items.map((i) => ({ productId: i.productId, quantity: i.quantity }));

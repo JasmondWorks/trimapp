@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { CartDrawer } from "./CartDrawer";
 import { Scissors, Menu } from "lucide-react";
-import { useUser, useRoles } from "@/hooks/useUser";
-import { useState } from "react";
+import { useRoles, useSignOut } from "@/models/auth/auth.hooks";
+import { useUiStore } from "@/stores/ui.store";
 
 type NavLinksProps = {
   user: unknown;
@@ -74,13 +73,15 @@ function NavLinks({ user, isVendor, isAdmin, onClick }: NavLinksProps) {
 }
 
 export function SiteHeader() {
-  const { user } = useUser();
-  const { isVendor, isAdmin } = useRoles();
+  const { user, isVendor, isAdmin } = useRoles();
+  const { signOut } = useSignOut();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const open = useUiStore((s) => s.isMobileNavOpen);
+  const setOpen = useUiStore((s) => s.setMobileNavOpen);
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await signOut();
+    setOpen(false);
     router.push("/");
     router.refresh();
   };
@@ -131,7 +132,7 @@ export function SiteHeader() {
           <button
             aria-label="Menu"
             className="md:hidden p-2"
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => setOpen(!open)}
           >
             <Menu className="h-5 w-5" />
           </button>

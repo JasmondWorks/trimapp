@@ -1,46 +1,27 @@
 "use client";
 
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useSetBookingStatus, useVendorBookings } from "@/models/booking/booking.hooks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatNaira } from "@/lib/format";
 import { toast } from "sonner";
+import type { BookingStatus } from "@/models/booking/booking.types";
 
 export default VendorBookings;
 
 function VendorBookings() {
-  const qc = useQueryClient();
-  const { data: vendor } = useQuery({
-    queryKey: ["me-vendor"],
-    queryFn: async () => {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) return null;
-      const { data } = await supabase.from("vendors").select("id").eq("user_id", u.user.id).maybeSingle();
-      return data;
-    },
-  });
+  const { bookings } = useVendorBookings();
+  const { setStatus } = useSetBookingStatus();
 
-  const { data: bookings } = useQuery({
-    enabled: !!vendor?.id,
-    queryKey: ["vendor-bookings", vendor?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("bookings")
-        .select("id,scheduled_at,status,mode,address,notes,total_amount,services(name)")
-        .eq("vendor_id", vendor!.id)
-        .order("scheduled_at", { ascending: false });
-      return data ?? [];
-    },
-  });
-
-  const setStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from("bookings").update({ status }).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => { toast.success("Updated"); qc.invalidateQueries({ queryKey: ["vendor-bookings"] }); },
-  });
+  const handleStatus = async (id: string, status: BookingStatus) => {
+    try {
+      await setStatus({ id, status });
+      toast.success("Updated");
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  };
 
   return (
     <div>
@@ -60,12 +41,12 @@ function VendorBookings() {
                 <span className="font-semibold text-primary">{formatNaira(b.total_amount)}</span>
                 {b.status === "pending" && (
                   <>
-                    <Button size="sm" onClick={() => setStatus.mutate({ id: b.id, status: "confirmed" })}>Confirm</Button>
-                    <Button size="sm" variant="outline" onClick={() => setStatus.mutate({ id: b.id, status: "cancelled" })}>Decline</Button>
+                    <Button size="sm" onClick={() => void handleStatus(b.id, "confirmed")}>Confirm</Button>
+                    <Button size="sm" variant="outline" onClick={() => void handleStatus(b.id, "cancelled")}>Decline</Button>
                   </>
                 )}
                 {b.status === "confirmed" && (
-                  <Button size="sm" onClick={() => setStatus.mutate({ id: b.id, status: "completed" })}>Mark done</Button>
+                  <Button size="sm" onClick={() => void handleStatus(b.id, "completed")}>Mark done</Button>
                 )}
               </div>
             </div>

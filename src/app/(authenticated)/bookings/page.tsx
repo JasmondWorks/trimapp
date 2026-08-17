@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useCancelBooking, useMyBookings } from "@/models/booking/booking.hooks";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,36 +11,17 @@ import { toast } from "sonner";
 export default MyBookings;
 
 function MyBookings() {
-  const qc = useQueryClient();
-  const { data, isLoading } = useQuery({
-    queryKey: ["my-bookings"],
-    queryFn: async () => {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) return [];
-      const { data } = await supabase
-        .from("bookings")
-        .select(
-          "id,scheduled_at,status,notes,mode,address,total_amount,payment_status,vendor_id,service_id,vendors(business_name),services(name,duration_minutes)",
-        )
-        .eq("user_id", u.user.id)
-        .order("scheduled_at", { ascending: false });
-      return data ?? [];
-    },
-  });
+  const { bookings: data, isLoading } = useMyBookings();
+  const { cancelBooking } = useCancelBooking();
 
-  const cancel = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("bookings")
-        .update({ status: "cancelled" })
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
+  const handleCancel = async (id: string) => {
+    try {
+      await cancelBooking(id);
       toast.success("Cancelled");
-      qc.invalidateQueries({ queryKey: ["my-bookings"] });
-    },
-  });
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -97,7 +77,7 @@ function MyBookings() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => cancel.mutate(b.id)}
+                      onClick={() => void handleCancel(b.id)}
                     >
                       Cancel
                     </Button>

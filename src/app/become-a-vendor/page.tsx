@@ -2,8 +2,6 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,47 +9,40 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NG_STATES } from "@/data/nigeria";
-import { useUser } from "@/hooks/useUser";
+import { useCurrentUser } from "@/models/auth/auth.hooks";
+import { useApplyAsVendor } from "@/models/vendor/vendor.hooks";
+import {
+  DEFAULT_HOME_RADIUS_KM,
+  DEFAULT_SERVICE_MODE,
+  DEFAULT_STATE_CODE,
+  DEFAULT_VENDOR_CATEGORY,
+  SERVICE_MODE_LABELS,
+} from "@/models/vendor/vendor.constants";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
 export default function BecomeVendor() {
-  const { user } = useUser();
+  const { user } = useCurrentUser();
+  const { apply, isApplying } = useApplyAsVendor();
   const router = useRouter();
   const [form, setForm] = useState({
     business_name: "", bio: "",
-    category: "barber" as "barber" | "hairdresser",
-    address: "", city: "", state: "LA",
+    category: DEFAULT_VENDOR_CATEGORY as "barber" | "hairdresser",
+    address: "", city: "", state: DEFAULT_STATE_CODE,
     phone: "",
-    service_mode: "in_shop" as "in_shop" | "home" | "both",
-    home_radius_km: "5",
+    service_mode: DEFAULT_SERVICE_MODE as "in_shop" | "home" | "both",
+    home_radius_km: String(DEFAULT_HOME_RADIUS_KM),
   });
 
-  const apply = useMutation({
-    mutationFn: async () => {
-      if (!user) throw new Error("Sign in first");
-      const { error } = await supabase.from("vendors").insert({
-        user_id: user.id,
-        business_name: form.business_name,
-        bio: form.bio || null,
-        category: form.category,
-        address: form.address || null,
-        city: form.city || null,
-        state: form.state,
-        phone: form.phone || null,
-        service_mode: form.service_mode,
-        home_radius_km: parseFloat(form.home_radius_km || "5"),
-        status: "pending",
-      });
-      if (error) throw error;
-      await supabase.from("user_roles").insert({ user_id: user.id, role: "vendor" }).select();
-    },
-    onSuccess: () => {
+  const handleApply = async () => {
+    try {
+      await apply(form);
       toast.success("Application submitted. We'll review and reach out.");
       router.push("/vendor");
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -72,7 +63,7 @@ export default function BecomeVendor() {
           </div>
         ) : (
           <form
-            onSubmit={(e) => { e.preventDefault(); apply.mutate(); }}
+            onSubmit={(e) => { e.preventDefault(); void handleApply(); }}
             className="space-y-4 rounded-lg border border-border bg-card p-6"
           >
             <div>
@@ -113,9 +104,9 @@ export default function BecomeVendor() {
                 <Select value={form.service_mode} onValueChange={(v) => setForm({ ...form, service_mode: v as typeof form.service_mode })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="in_shop">In-shop only</SelectItem>
-                    <SelectItem value="home">Home service only</SelectItem>
-                    <SelectItem value="both">Both</SelectItem>
+                    {Object.entries(SERVICE_MODE_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -123,10 +114,10 @@ export default function BecomeVendor() {
                 <div><Label>Home service radius (km)</Label><Input type="number" min={1} value={form.home_radius_km} onChange={(e) => setForm({ ...form, home_radius_km: e.target.value })} /></div>
               )}
             </div>
-            <Button type="submit" disabled={apply.isPending} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-              {apply.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit application"}
+            <Button type="submit" disabled={isApplying} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+              {isApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit application"}
             </Button>
-            <p className="text-xs text-muted-foreground text-center">You'll be able to fine-tune your profile after applying.</p>
+            <p className="text-xs text-muted-foreground text-center">You&apos;ll be able to fine-tune your profile after applying.</p>
           </form>
         )}
       </div>

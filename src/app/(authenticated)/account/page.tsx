@@ -1,44 +1,42 @@
 "use client";
 
-
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useState } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useMyProfile, useUpdateMyProfile } from "@/models/profile/profile.hooks";
 import { toast } from "sonner";
 
 export default Account;
 
 function Account() {
+  const { profile, email } = useMyProfile();
+  const { updateProfile, isSaving } = useUpdateMyProfile();
   const [form, setForm] = useState({ full_name: "", username: "", phone: "" });
-  const [saving, setSaving] = useState(false);
-  const [email, setEmail] = useState("");
 
-  useEffect(() => {
-    (async () => {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) return;
-      setEmail(u.user.email ?? "");
-      const { data } = await supabase.from("profiles").select("*").eq("id", u.user.id).maybeSingle();
-      if (data) setForm({
-        full_name: data.full_name ?? "",
-        username: data.username ?? "",
-        phone: data.phone ?? "",
-      });
-    })();
-  }, []);
+  // Seed the form once the profile arrives. Adjusting state during render
+  // (rather than in an effect) is React's documented pattern for "reset local
+  // state when the data it mirrors changes" — it re-renders before painting
+  // instead of flashing the empty form first.
+  const [seededFor, setSeededFor] = useState<string | null>(null);
+  if (profile && seededFor !== profile.id) {
+    setSeededFor(profile.id);
+    setForm({
+      full_name: profile.full_name ?? "",
+      username: profile.username ?? "",
+      phone: profile.phone ?? "",
+    });
+  }
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
-    const { data: u } = await supabase.auth.getUser();
-    if (!u.user) { setSaving(false); return; }
-    const { error } = await supabase.from("profiles").upsert({ id: u.user.id, ...form });
-    setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success("Profile saved");
+    try {
+      await updateProfile(form);
+      toast.success("Profile saved");
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
   };
 
   return (
@@ -51,8 +49,8 @@ function Account() {
           <div><Label>Full name</Label><Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} /></div>
           <div><Label>Username</Label><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></div>
           <div><Label>Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="080…" /></div>
-          <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={saving}>
-            {saving ? "Saving…" : "Save changes"}
+          <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={isSaving}>
+            {isSaving ? "Saving…" : "Save changes"}
           </Button>
         </form>
       </div>

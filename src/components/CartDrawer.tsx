@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -11,13 +10,16 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { ShoppingBag, Minus, Plus, Trash2 } from "lucide-react";
-import { useCartStore } from "@/lib/shopify";
-import { useVendorCart } from "@/stores/vendorCart";
+import { useCartSummary } from "@/models/cart/cart.hooks";
+import { useCartStore } from "@/stores/shopifyCart.store";
+import { useUiStore } from "@/stores/ui.store";
+import { useVendorCart } from "@/stores/vendorCart.store";
 import { formatNaira } from "@/lib/format";
 import Link from "next/link";
 
 export function CartDrawer() {
-  const [open, setOpen] = useState(false);
+  const open = useUiStore((s) => s.isCartOpen);
+  const setOpen = useUiStore((s) => s.setCartOpen);
   const shopifyItems = useCartStore((s) => s.items);
   const updateShopify = useCartStore((s) => s.updateQuantity);
   const removeShopify = useCartStore((s) => s.removeItem);
@@ -26,9 +28,7 @@ export function CartDrawer() {
   const updateVendor = useVendorCart((s) => s.updateQuantity);
   const removeVendor = useVendorCart((s) => s.removeItem);
 
-  const total =
-    shopifyItems.reduce((s, i) => s + i.quantity, 0) +
-    vendorItems.reduce((s, i) => s + i.quantity, 0);
+  const { totalItemCount: total } = useCartSummary();
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>

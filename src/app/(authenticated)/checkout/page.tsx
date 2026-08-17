@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,9 +16,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
-import { useCartStore } from "@/lib/shopify";
-import { useVendorCart } from "@/stores/vendorCart";
+import { useCartStore } from "@/stores/shopifyCart.store";
+import { toCheckoutLines, useVendorCart } from "@/stores/vendorCart.store";
+import { useCheckout } from "@/models/order/order.hooks";
+import { useMyProfile } from "@/models/profile/profile.hooks";
+import { DEFAULT_STATE_CODE } from "@/models/vendor/vendor.constants";
 import { formatNaira } from "@/lib/format";
 import { NG_STATES } from "@/data/nigeria";
 import { toast } from "sonner";
@@ -29,7 +30,6 @@ export default Checkout;
 
 function Checkout() {
   const router = useRouter();
-  const qc = useQueryClient();
 
   const vendorItems = useVendorCart((s) => s.items);
   const clearVendor = useVendorCart((s) => s.clearCart);
@@ -42,81 +42,55 @@ function Checkout() {
     0,
   );
 
-  const { data: profile } = useQuery({
-    queryKey: ["profile-me"],
-    queryFn: async () => {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) return null;
-      const { data } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", u.user.id)
-        .maybeSingle();
-      return data;
-    },
-  });
+  // Derived here rather than in a store selector: zustand v5 hands the
+  // selector straight to useSyncExternalStore, so one returning a new array
+  // every call makes the snapshot unstable and loops.
+  const checkoutLines = useMemo(() => toCheckoutLines(vendorItems), [vendorItems]);
+  const { profile } = useMyProfile();
+  const { checkout, isPlacingOrder } = useCheckout();
 
   const [form, setForm] = useState({
     name: "",
     phone: "",
     address: "",
     city: "",
-    state: "LA",
+    state: DEFAULT_STATE_CODE,
     notes: "",
   });
-  if (profile && !form.name)
+
+  // Prefill from the saved profile exactly once — re-seeding on every render
+  // would fight the user's edits. Adjusting state during render keeps the
+  // fields from flashing empty first.
+  const [prefilled, setPrefilled] = useState(false);
+  if (profile && !prefilled) {
+    setPrefilled(true);
     setForm((f) => ({
       ...f,
       name: profile.full_name ?? "",
       phone: profile.phone ?? "",
     }));
+  }
 
-  const placeVendorOrder = useMutation({
-    mutationFn: async () => {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) throw new Error("Not signed in");
-      if (vendorItems.length === 0) throw new Error("No vendor items");
-      const { data: order, error } = await supabase
-        .from("orders")
-        .insert({
-          user_id: u.user.id,
-          total_naira: vendorTotal,
-          status: "awaiting_payment",
-          delivery_name: form.name,
-          delivery_phone: form.phone,
-          delivery_address: form.address,
-          delivery_city: form.city,
-          delivery_state: form.state,
-          notes: form.notes || null,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-      const items = vendorItems.map((i) => ({
-        order_id: order.id,
-        source: "vendor" as const,
-        vendor_product_id: i.productId,
-        seller_vendor_id: i.vendorId,
-        title: i.title,
-        image_url: i.imageUrl,
-        unit_price: i.unitPrice,
-        quantity: i.quantity,
-        commission_amount: Math.round(
-          (i.unitPrice * i.quantity * i.commissionPct) / 100,
-        ),
-      }));
-      const { error: e2 } = await supabase.from("order_items").insert(items);
-      if (e2) throw e2;
-      return order.id;
-    },
-    onSuccess: () => {
+  const placeVendorOrder = async () => {
+    try {
+      await checkout({
+        delivery: {
+          name: form.name,
+          phone: form.phone,
+          address: form.address,
+          city: form.city,
+          state: form.state,
+          notes: form.notes,
+        },
+        lines: checkoutLines,
+      });
       toast.success("Order saved — Paystack coming soon");
       clearVendor();
-      qc.invalidateQueries({ queryKey: ["my-orders"] });
       router.push("/orders");
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  };
 
   const hasNothing = shopifyItems.length === 0 && vendorItems.length === 0;
 
@@ -234,10 +208,10 @@ function Checkout() {
                 </div>
                 <Button
                   className="mt-4 w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                  onClick={() => placeVendorOrder.mutate()}
-                  disabled={placeVendorOrder.isPending}
+                  onClick={() => void placeVendorOrder()}
+                  disabled={isPlacingOrder}
                 >
-                  {placeVendorOrder.isPending ? (
+                  {isPlacingOrder ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     `Place vendor order · ${formatNaira(vendorTotal)}`

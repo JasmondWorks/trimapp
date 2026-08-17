@@ -1,9 +1,21 @@
 "use client";
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
+import {
+  AUTH_CALLBACK_ROUTE,
+  PASSWORD_MIN_LENGTH,
+  POST_AUTH_REDIRECT,
+} from "@/models/auth/auth.constants";
+import { RETURN_TO_PARAM } from "@/lib/auth-routes";
+import {
+  useCompleteOAuthSignIn,
+  useCurrentUser,
+  useRequestPasswordReset,
+  useSignIn,
+  useSignUp,
+} from "@/models/auth/auth.hooks";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,45 +26,89 @@ import { Loader2 } from "lucide-react";
 
 export default function AuthPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // The proxy appends ?next= when it turns a guest away from a protected page.
+  const returnTo = searchParams.get(RETURN_TO_PARAM) ?? POST_AUTH_REDIRECT;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [loading, setLoading] = useState(false);
 
+  const { user } = useCurrentUser();
+  const { signIn, isSigningIn } = useSignIn();
+  const { signUp, isSigningUp } = useSignUp();
+  const { completeOAuthSignIn } = useCompleteOAuthSignIn();
+  const { requestPasswordReset, isSending } = useRequestPasswordReset();
+  const loading = isSigningIn || isSigningUp;
+
+  // Already signed in — nothing to do on this page.
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) router.push("/discover");
-    });
-  }, [router]);
+    if (user) router.replace(returnTo);
+  }, [user, router, returnTo]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) return toast.error(error.message);
-    toast.success("Welcome back");
-    router.refresh();
-    router.push("/discover");
+    try {
+      await signIn({ email, password });
+      toast.success("Welcome back");
+      router.refresh();
+      router.push(returnTo);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email, password,
-      options: { emailRedirectTo: window.location.origin, data: { full_name: fullName } },
-    });
-    setLoading(false);
-    if (error) return toast.error(error.message);
-    toast.success("Account created");
-    router.refresh();
-    router.push("/discover");
+    try {
+      const session = await signUp({
+        fullName,
+        email,
+        password,
+        emailRedirectTo: `${window.location.origin}${AUTH_CALLBACK_ROUTE}`,
+      });
+      // No session means Supabase is waiting on an email confirmation.
+      if (!session) {
+        toast.success("Check your inbox to confirm your email.");
+        return;
+      }
+      toast.success("Account created");
+      router.refresh();
+      router.push(returnTo);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) return toast.error("Enter your email address first");
+    try {
+      const { message } = await requestPasswordReset({
+        email,
+        redirectTo: `${window.location.origin}${AUTH_CALLBACK_ROUTE}`,
+      });
+      toast.success(message);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
   };
 
   const handleGoogle = async () => {
-    const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-    if (result.error) toast.error("Google sign-in failed");
+    const result = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin,
+    });
+    // A redirect means the browser is leaving; we resume on the way back.
+    if (result.redirected) return;
+    if (result.error || !result.tokens) return toast.error("Google sign-in failed");
+
+    try {
+      // Hand the tokens to the server immediately — they are never stored here.
+      await completeOAuthSignIn(result.tokens);
+      toast.success("Welcome back");
+      router.refresh();
+      router.push(returnTo);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
   };
 
   return (
@@ -90,6 +146,14 @@ export default function AuthPage() {
               <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign in"}
               </Button>
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={isSending}
+                className="w-full text-center text-xs text-muted-foreground underline hover:text-foreground disabled:opacity-60"
+              >
+                {isSending ? "Sending reset link…" : "Forgot your password?"}
+              </button>
             </form>
           </TabsContent>
           <TabsContent value="signup">
@@ -99,7 +163,7 @@ export default function AuthPage() {
               <div><Label htmlFor="u-email">Email</Label>
                 <Input id="u-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></div>
               <div><Label htmlFor="u-pass">Password</Label>
-                <Input id="u-pass" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} /></div>
+                <Input id="u-pass" type="password" required minLength={PASSWORD_MIN_LENGTH} value={password} onChange={(e) => setPassword(e.target.value)} /></div>
               <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create account"}
               </Button>

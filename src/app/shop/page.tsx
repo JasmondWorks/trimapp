@@ -13,31 +13,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
 import {
   storefrontApiRequest,
   STOREFRONT_QUERY,
-  useCartStore,
   type ShopifyProduct,
 } from "@/lib/shopify";
-import { useVendorCart } from "@/stores/vendorCart";
+import { useCartStore } from "@/stores/shopifyCart.store";
+import { useVendorCart } from "@/stores/vendorCart.store";
+import { useShopProducts } from "@/models/product/product.hooks";
+import {
+  PRODUCT_CATEGORY_LABELS,
+  SHOPIFY_PRODUCT_LIMIT,
+} from "@/models/product/product.constants";
 import { formatNaira } from "@/lib/format";
 import { toast } from "sonner";
 import { useMemo, useState } from "react";
 import { ShieldCheck } from "lucide-react";
-
-type VendorProduct = {
-  id: string;
-  vendor_id: string;
-  title: string;
-  slug: string;
-  description: string | null;
-  category: string;
-  price_naira: number;
-  stock: number;
-  images: string[];
-  vendors: { business_name: string; commission_pct: number } | null;
-};
 
 export default function ShopPage() {
   const [query, setQuery] = useState("");
@@ -50,28 +41,14 @@ export default function ShopPage() {
     queryKey: ["shopify-products-all"],
     queryFn: async () => {
       const r = await storefrontApiRequest(STOREFRONT_QUERY, {
-        first: 40,
+        first: SHOPIFY_PRODUCT_LIMIT,
         query: null,
       });
       return (r?.data?.products?.edges ?? []) as ShopifyProduct[];
     },
   });
 
-  const vendorProducts = useQuery({
-    queryKey: ["vendor-products"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("vendor_products")
-        .select(
-          "id,vendor_id,title,slug,description,category,price_naira,stock,images,vendors(business_name,commission_pct)",
-        )
-        .eq("is_active", true)
-        .gt("stock", 0)
-        .limit(60);
-      if (error) throw error;
-      return data as unknown as VendorProduct[];
-    },
-  });
+  const vendorProducts = useShopProducts();
 
   const addShopify = useCartStore((s) => s.addItem);
   const addVendor = useVendorCart((s) => s.addItem);
@@ -91,7 +68,7 @@ export default function ShopPage() {
         sellerLabel: "TrimApp",
         raw: p,
       }));
-    const vendorCards = (vendorProducts.data ?? [])
+    const vendorCards = vendorProducts.products
       .filter(() => sellerFilter !== "trimapp")
       .map((p) => ({
         key: `v:${p.id}`,
@@ -112,7 +89,7 @@ export default function ShopPage() {
           ? [c.title, c.sellerLabel].some((x) => x.toLowerCase().includes(q))
           : true,
       );
-  }, [shopify.data, vendorProducts.data, query, category, sellerFilter]);
+  }, [shopify.data, vendorProducts.products, query, category, sellerFilter]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -140,12 +117,9 @@ export default function ShopPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All categories</SelectItem>
-              <SelectItem value="wigs">Wigs</SelectItem>
-              <SelectItem value="clippers">Clippers</SelectItem>
-              <SelectItem value="trimmers">Trimmers</SelectItem>
-              <SelectItem value="combs">Combs</SelectItem>
-              <SelectItem value="capes">Capes</SelectItem>
-              <SelectItem value="kits">Kits</SelectItem>
+              {Object.entries(PRODUCT_CATEGORY_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select
