@@ -93,7 +93,7 @@ function VendorProfile() {
     );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen ">
       <SiteHeader />
       <div className="relative h-56 bg-muted">
         {vendor.cover_url && (
@@ -104,7 +104,7 @@ function VendorProfile() {
           />
         )}
       </div>
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 -mt-12">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 -mt-12 z-99">
         <div className="rounded-lg border border-border bg-card p-6 flex flex-wrap items-start gap-4">
           <div className="h-20 w-20 rounded-full bg-muted overflow-hidden border-4 border-card">
             {vendor.avatar_url && (
@@ -341,7 +341,8 @@ function VendorProfile() {
                   )}
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  You&apos;ll pay after the vendor confirms. Paystack coming soon.
+                  You&apos;ll pay after the vendor confirms. Paystack coming
+                  soon.
                 </p>
               </div>
             )}
