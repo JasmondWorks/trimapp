@@ -28,6 +28,7 @@ const DEMO_PASSWORD = "DemoPassword123!";
 const args = new Set(process.argv.slice(2));
 const CLEAN = args.has("--clean");
 const PRUNE_ORPHANS = args.has("--prune-orphans");
+const ADMIN = args.has("--admin");
 
 /* ---------------------------------------------------------------- config -- */
 
@@ -188,6 +189,64 @@ async function pruneOrphans() {
   console.log(`  removed ${orphans.length} orphaned salon service(s)`);
 }
 
+/**
+ * Creates the platform admin from ADMIN_EMAIL / ADMIN_PASSWORD.
+ *
+ * This is the answer to the bootstrap problem: the RLS policy that writes
+ * user_roles requires you to already be an admin, so the first one cannot be
+ * made through the app. Deliberately a script, run with the service-role key,
+ * rather than a route anyone could reach.
+ *
+ * The credentials are read from server-only variables. A NEXT_PUBLIC_ prefix
+ * would inline them into the browser bundle.
+ */
+async function seedAdmin() {
+  const email = (process.env.ADMIN_EMAIL || cfg.ADMIN_EMAIL || "").trim();
+  const password = (process.env.ADMIN_PASSWORD || cfg.ADMIN_PASSWORD || "").trim();
+
+  if (!email || !password) {
+    console.error("  ✗ set ADMIN_EMAIL and ADMIN_PASSWORD in .env.local");
+    process.exit(1);
+  }
+
+  const existing = (await (await fetch(`${URL_}/auth/v1/admin/users?page=1&per_page=200`, { headers: H })).json())
+    .users?.find((u) => (u.email ?? "").toLowerCase() === email.toLowerCase());
+
+  let user = existing;
+  if (user) {
+    // Re-running should make the stated password true, not silently diverge.
+    const res = await fetch(`${URL_}/auth/v1/admin/users/${user.id}`, {
+      method: "PUT", headers: H,
+      body: JSON.stringify({ password, email_confirm: true }),
+    });
+    if (!res.ok) throw new Error(`update admin: ${(await res.text()).slice(0, 200)}`);
+    console.log(`  reused existing account ${email} (password reset)`);
+  } else {
+    const res = await fetch(`${URL_}/auth/v1/admin/users`, {
+      method: "POST", headers: H,
+      body: JSON.stringify({
+        email, password, email_confirm: true,
+        user_metadata: { full_name: "Platform Admin" },
+      }),
+    });
+    user = await res.json();
+    if (!res.ok) throw new Error(`create admin: ${JSON.stringify(user).slice(0, 200)}`);
+    console.log(`  created ${email}`);
+  }
+
+  await fetch(`${URL_}/rest/v1/user_roles?on_conflict=user_id,role`, {
+    method: "POST", headers: { ...H, Prefer: "resolution=ignore-duplicates" },
+    body: JSON.stringify({ user_id: user.id, role: "admin" }),
+  });
+
+  const roles = (await rest(`user_roles?select=role&user_id=eq.${user.id}`)).map((r) => r.role);
+  if (!roles.includes("admin")) throw new Error(`admin role not present: ${roles.join(", ") || "none"}`);
+
+  console.log(`  user id : ${user.id}`);
+  console.log(`  roles   : ${roles.join(", ")}`);
+  console.log("\n  Sign in, then use /admin/users to grant roles to anyone else.");
+}
+
 async function seed() {
   const created = { vendors: 0, services: 0, products: 0, bookings: 0, reviews: 0 };
 
@@ -300,5 +359,6 @@ async function seed() {
 console.log(`\n  project: ${URL_}\n`);
 if (CLEAN) await clean();
 else if (PRUNE_ORPHANS) await pruneOrphans();
+else if (ADMIN) await seedAdmin();
 else await seed();
 console.log();

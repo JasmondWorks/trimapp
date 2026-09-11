@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed": "node scripts/seed-data.mjs"
+    "seed": "node scripts/seed-data.mjs",
+    "seed:admin": "node scripts/seed-data.mjs --admin"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

@@ -8,14 +8,21 @@ import { Scissors, Menu } from "lucide-react";
 import { useRoles, useSignOut } from "@/models/auth/auth.hooks";
 import { useUiStore } from "@/stores/ui.store";
 
+/**
+ * The admin area is deliberately absent from this nav.
+ *
+ * It was only rendered for admins, so it leaked nothing — but the entrance to
+ * the platform's control surface has no business being discoverable in the
+ * public shell. Admins navigate to /admin directly; the proxy and RequireRole
+ * enforce access, so hiding the link is presentation, not protection.
+ */
 type NavLinksProps = {
   user: unknown;
   isVendor: boolean;
-  isAdmin: boolean;
   onClick?: () => void;
 };
 
-function NavLinks({ user, isVendor, isAdmin, onClick }: NavLinksProps) {
+function NavLinks({ user, isVendor, onClick }: NavLinksProps) {
   return (
     <>
       <Link
@@ -59,21 +66,12 @@ function NavLinks({ user, isVendor, isAdmin, onClick }: NavLinksProps) {
           Vendor
         </Link>
       )}
-      {isAdmin && (
-        <Link
-          href="/admin"
-          onClick={onClick}
-          className="text-primary font-medium hover:opacity-80"
-        >
-          Admin
-        </Link>
-      )}
     </>
   );
 }
 
 export function SiteHeader() {
-  const { user, isVendor, isAdmin } = useRoles();
+  const { user, isVendor } = useRoles();
   const { signOut } = useSignOut();
   const router = useRouter();
   const open = useUiStore((s) => s.isMobileNavOpen);
@@ -99,7 +97,7 @@ export function SiteHeader() {
         </Link>
 
         <nav className="hidden md:flex items-center gap-6 text-sm">
-          <NavLinks user={user} isVendor={isVendor} isAdmin={isAdmin} />
+          <NavLinks user={user} isVendor={isVendor} />
         </nav>
 
         <div className="flex items-center gap-2">
@@ -145,7 +143,6 @@ export function SiteHeader() {
             <NavLinks
               user={user}
               isVendor={isVendor}
-              isAdmin={isAdmin}
               onClick={() => setOpen(false)}
             />
             {user ? (
