@@ -34,8 +34,17 @@ export type AuthCallback =
   | { kind: "error"; error: AuthCallbackError }
   | null;
 
+/** Query params Supabase uses to report a failed callback. */
+const ERROR_PARAMS = ["error", "error_code", "error_description"] as const;
+
 /**
- * Reads the fragment without modifying it.
+ * Reads the callback result without modifying the URL.
+ *
+ * Both locations have to be checked. A *successful* sign-in comes back in the
+ * fragment (`#access_token=…`), but a failed one comes back in the query
+ * string (`?error=server_error&error_description=…`) — reading only the
+ * fragment silently discards the reason and leaves the user staring at a
+ * generic "that link didn't work".
  *
  * Deliberately pure: this runs in a `useState` initializer, which React may
  * invoke twice under StrictMode. Clearing here would make the second call
@@ -45,19 +54,32 @@ export function parseAuthCallback(): AuthCallback {
   if (typeof window === "undefined") return null;
 
   const hash = window.location.hash.replace(/^#/, "");
-  if (!hash) return null;
+  const query = window.location.search.replace(/^\?/, "");
+  if (!hash && !query) return null;
 
-  const params = new URLSearchParams(hash);
+  // Fragment wins: it is where a usable session arrives.
+  const params = new URLSearchParams(hash || query);
+  const queryParams = new URLSearchParams(query);
 
-  const error = params.get("error") ?? params.get("error_code");
+  const error =
+    params.get("error") ??
+    params.get("error_code") ??
+    queryParams.get("error") ??
+    queryParams.get("error_code");
   if (error) {
     return {
       kind: "error",
       error: {
-        code: params.get("error_code") ?? params.get("error"),
+        code:
+          params.get("error_code") ??
+          params.get("error") ??
+          queryParams.get("error_code") ??
+          queryParams.get("error"),
         description:
-          params.get("error_description")?.replace(/\+/g, " ") ??
-          "That link is no longer valid.",
+          (params.get("error_description") ?? queryParams.get("error_description"))?.replace(
+            /\+/g,
+            " ",
+          ) ?? "That link is no longer valid.",
       },
     };
   }
@@ -80,7 +102,14 @@ export function parseAuthCallback(): AuthCallback {
 export function stripAuthCallback(): void {
   if (typeof window === "undefined") return;
   const { pathname, search } = window.location;
-  window.history.replaceState(null, "", `${pathname}${search}`);
+
+  // Drop the auth params but keep anything else the page relies on, such as
+  // the `next` destination.
+  const remaining = new URLSearchParams(search);
+  for (const key of ERROR_PARAMS) remaining.delete(key);
+  const qs = remaining.toString();
+
+  window.history.replaceState(null, "", `${pathname}${qs ? `?${qs}` : ""}`);
 }
 
 /** Message shown once the session has been established, keyed by link type. */
