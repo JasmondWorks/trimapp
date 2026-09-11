@@ -2,16 +2,17 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { lovable } from "@/integrations/lovable";
 import {
   AUTH_CALLBACK_ROUTE,
+  OAUTH_PROVIDER_LABELS,
+  OAUTH_PROVIDERS,
   PASSWORD_MIN_LENGTH,
   POST_AUTH_REDIRECT,
 } from "@/models/auth/auth.constants";
 import { RETURN_TO_PARAM } from "@/lib/auth-routes";
 import {
-  useCompleteOAuthSignIn,
   useCurrentUser,
+  useOAuthSignIn,
   useRequestPasswordReset,
   useSignIn,
   useSignUp,
@@ -36,7 +37,7 @@ export default function AuthPage() {
   const { user } = useCurrentUser();
   const { signIn, isSigningIn } = useSignIn();
   const { signUp, isSigningUp } = useSignUp();
-  const { completeOAuthSignIn } = useCompleteOAuthSignIn();
+  const { signInWithProvider } = useOAuthSignIn();
   const { requestPasswordReset, isSending } = useRequestPasswordReset();
   const loading = isSigningIn || isSigningUp;
 
@@ -92,25 +93,6 @@ export default function AuthPage() {
     }
   };
 
-  const handleGoogle = async () => {
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    // A redirect means the browser is leaving; we resume on the way back.
-    if (result.redirected) return;
-    if (result.error || !result.tokens) return toast.error("Google sign-in failed");
-
-    try {
-      // Hand the tokens to the server immediately — they are never stored here.
-      await completeOAuthSignIn(result.tokens);
-      toast.success("Welcome back");
-      router.refresh();
-      router.push(returnTo);
-    } catch (error) {
-      toast.error((error as Error).message);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
@@ -121,9 +103,16 @@ export default function AuthPage() {
           <p className="text-muted-foreground mt-2 text-sm">Sign in or create an account to book and shop.</p>
         </div>
 
-        <Button variant="outline" className="w-full mb-4" onClick={handleGoogle}>
-          Continue with Google
-        </Button>
+        {OAUTH_PROVIDERS.map((provider) => (
+          <Button
+            key={provider}
+            variant="outline"
+            className="w-full mb-4"
+            onClick={() => signInWithProvider(provider)}
+          >
+            {OAUTH_PROVIDER_LABELS[provider]}
+          </Button>
+        ))}
 
         <div className="relative my-6">
           <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border" /></div>

@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { unwrap } from "@/lib/api";
@@ -17,9 +17,11 @@ import { tokenManager } from "@/lib/token-manager";
 import { useAuthStore } from "@/stores/auth.store";
 
 import {
+  AUTH_CALLBACK_ROUTE,
   AUTH_QUERY_KEYS,
   PASSWORD_RESET_ROUTE,
   SESSION_STALE_TIME,
+  SUPABASE_AUTHORIZE_PATH,
 } from "./auth.constants";
 import {
   completeOAuthSignIn,
@@ -34,6 +36,7 @@ import {
   updatePassword,
 } from "./auth.services";
 import type {
+  OAuthProvider,
   OAuthTokens,
   RequestPasswordResetInput,
   Role,
@@ -278,6 +281,42 @@ export function useAuthCallback() {
  * and are forwarded straight to the server — the browser keeps only the
  * access token, in memory.
  */
+/**
+ * Starts a hosted OAuth sign-in.
+ *
+ * Sends the browser to Supabase's authorize endpoint, which bounces through
+ * the provider and comes back to /auth/callback with the session in the URL
+ * fragment — where `useAuthCallback` already picks it up. That keeps the whole
+ * flow inside Supabase, with no third-party broker and no Supabase client in
+ * the browser.
+ *
+ * A full navigation, not fetch: the provider has to render its own consent
+ * screen, so the page must actually leave.
+ */
+export function useOAuthSignIn() {
+  const signInWithProvider = useCallback((provider: OAuthProvider) => {
+    const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!base) {
+      toast.error("Sign-in is unavailable — Supabase is not configured.");
+      return;
+    }
+
+    // Deliberately no query string on redirect_to: Supabase matches it against
+    // the redirect allow list, and appending params risks failing that match
+    // and silently bouncing the user to the Site URL instead. The callback
+    // page falls back to its default destination.
+    const redirectTo = new URL(AUTH_CALLBACK_ROUTE, window.location.origin).toString();
+
+    const authorize = new URL(SUPABASE_AUTHORIZE_PATH, base);
+    authorize.searchParams.set("provider", provider);
+    authorize.searchParams.set("redirect_to", redirectTo);
+
+    window.location.assign(authorize.toString());
+  }, []);
+
+  return { signInWithProvider };
+}
+
 export function useCompleteOAuthSignIn() {
   const queryClient = useQueryClient();
   const setUser = useAuthStore((s) => s.setUser);

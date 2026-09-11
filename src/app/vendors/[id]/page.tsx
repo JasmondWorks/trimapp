@@ -93,9 +93,9 @@ function VendorProfile() {
     );
 
   return (
-    <div className="min-h-screen ">
+    <div className="min-h-screen bg-background">
       <SiteHeader />
-      <div className="relative h-56 bg-muted">
+      <div className="h-56 bg-muted overflow-hidden">
         {vendor.cover_url && (
           <img
             src={vendor.cover_url}
@@ -104,7 +104,9 @@ function VendorProfile() {
           />
         )}
       </div>
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 -mt-12 z-99">
+      {/* Pulled up over the cover. Needs `relative` for z-index to apply at all —
+          z-index is ignored on static elements. */}
+      <div className="relative z-10 mx-auto max-w-6xl px-4 sm:px-6 -mt-12">
         <div className="rounded-lg border border-border bg-card p-6 flex flex-wrap items-start gap-4">
           <div className="h-20 w-20 rounded-full bg-muted overflow-hidden border-4 border-card">
             {vendor.avatar_url && (

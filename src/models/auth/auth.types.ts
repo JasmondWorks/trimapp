@@ -1,6 +1,6 @@
 import type { z } from "zod";
 
-import type { ROLES } from "./auth.constants";
+import type { OAUTH_PROVIDERS, ROLES } from "./auth.constants";
 import type {
   oauthTokensSchema,
   requestPasswordResetSchema,
@@ -10,6 +10,7 @@ import type {
 } from "./auth.schemas";
 
 export type Role = (typeof ROLES)[number];
+export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
 
 /**
  * The subset of Supabase's `User` we hand to the client. Deliberately narrow —

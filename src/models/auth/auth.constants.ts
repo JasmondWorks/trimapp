@@ -30,3 +30,13 @@ export const PASSWORD_RESET_ROUTE = "/auth/reset-password";
 export const SESSION_STALE_TIME = 5 * 60 * 1000;
 
 export const PASSWORD_MIN_LENGTH = 8;
+
+/** Providers enabled on the Supabase project. */
+export const OAUTH_PROVIDERS = ["google"] as const;
+
+/** Supabase's hosted OAuth entry point. */
+export const SUPABASE_AUTHORIZE_PATH = "/auth/v1/authorize";
+
+export const OAUTH_PROVIDER_LABELS: Record<(typeof OAUTH_PROVIDERS)[number], string> = {
+  google: "Continue with Google",
+};
