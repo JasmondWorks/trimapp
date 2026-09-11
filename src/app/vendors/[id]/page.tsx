@@ -21,6 +21,7 @@ import { useCurrentUser } from "@/models/auth/auth.hooks";
 import { useVendor } from "@/models/vendor/vendor.hooks";
 import { useVendorServices } from "@/models/service/service.hooks";
 import { useReviews } from "@/models/review/review.hooks";
+import { ReviewForm } from "@/components/reviews/ReviewForm";
 import { useCreateBooking } from "@/models/booking/booking.hooks";
 import { DEFAULT_BOOKING_TIME } from "@/models/booking/booking.constants";
 import { toast } from "sonner";
@@ -206,6 +207,9 @@ function VendorProfile() {
             )}
 
             <h2 className="font-display text-2xl mt-10 mb-3">Reviews</h2>
+            <div className="mb-4">
+              <ReviewForm targetType="vendor" targetId={id} />
+            </div>
             {reviews && reviews.length > 0 ? (
               <div className="space-y-3">
                 {reviews.map((r) => (

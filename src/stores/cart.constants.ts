@@ -6,3 +6,6 @@
  */
 export const VENDOR_CART_STORAGE_KEY = "trimapp-vendor-cart";
 export const SHOPIFY_CART_STORAGE_KEY = "shopify-cart";
+
+/** Cached geolocation for /discover — a convenience, never a credential. */
+export const GEO_CACHE_KEY = "trimapp:coords";
