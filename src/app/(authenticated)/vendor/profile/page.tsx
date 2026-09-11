@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NG_STATES } from "@/data/nigeria";
 import { toast } from "sonner";
+import { ImageUpload } from "@/components/media/ImageUpload";
 
 export default VendorProfileEdit;
 
@@ -120,8 +121,23 @@ function VendorProfileEdit() {
           <div><Label>Home radius (km)</Label><Input type="number" value={form.home_radius_km} onChange={(e) => setForm({ ...form, home_radius_km: e.target.value })} /></div>
         )}
       </div>
-      <div><Label>Avatar URL</Label><Input value={form.avatar_url} onChange={(e) => setForm({ ...form, avatar_url: e.target.value })} placeholder="https://…" /></div>
-      <div><Label>Cover URL</Label><Input value={form.cover_url} onChange={(e) => setForm({ ...form, cover_url: e.target.value })} placeholder="https://…" /></div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <ImageUpload
+          scope="vendors"
+          ownerId={vendor.id}
+          label="Shop avatar"
+          value={form.avatar_url || null}
+          onChange={(url) => setForm({ ...form, avatar_url: url ?? "" })}
+        />
+        <ImageUpload
+          scope="vendors"
+          ownerId={vendor.id}
+          label="Cover photo"
+          aspect="wide"
+          value={form.cover_url || null}
+          onChange={(url) => setForm({ ...form, cover_url: url ?? "" })}
+        />
+      </div>
       <div><Label>Portfolio image URLs (one per line)</Label><Textarea rows={4} value={form.portfolio_urls_text} onChange={(e) => setForm({ ...form, portfolio_urls_text: e.target.value })} /></div>
       <Button type="submit" disabled={isSaving} className="bg-primary text-primary-foreground hover:bg-primary/90">
         {isSaving ? "Saving…" : "Save changes"}

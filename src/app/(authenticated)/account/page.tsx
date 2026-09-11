@@ -7,13 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMyProfile, useUpdateMyProfile } from "@/models/profile/profile.hooks";
 import { toast } from "sonner";
+import { ImageUpload } from "@/components/media/ImageUpload";
 
 export default Account;
 
 function Account() {
   const { profile, email } = useMyProfile();
   const { updateProfile, isSaving } = useUpdateMyProfile();
-  const [form, setForm] = useState({ full_name: "", username: "", phone: "" });
+  const [form, setForm] = useState({ full_name: "", username: "", phone: "", avatar_url: null as string | null });
 
   // Seed the form once the profile arrives. Adjusting state during render
   // (rather than in an effect) is React's documented pattern for "reset local
@@ -26,6 +27,7 @@ function Account() {
       full_name: profile.full_name ?? "",
       username: profile.username ?? "",
       phone: profile.phone ?? "",
+      avatar_url: profile.avatar_url ?? null,
     });
   }
 
@@ -45,6 +47,13 @@ function Account() {
       <div className="mx-auto max-w-xl px-4 sm:px-6 py-10">
         <h1 className="font-display text-4xl mb-6">Your account</h1>
         <form onSubmit={save} className="space-y-4 rounded-lg border border-border bg-card p-6">
+          <ImageUpload
+            scope="profiles"
+            ownerId={profile?.id}
+            label="Profile picture"
+            value={form.avatar_url}
+            onChange={(url) => setForm({ ...form, avatar_url: url })}
+          />
           <div><Label>Email</Label><Input value={email} disabled /></div>
           <div><Label>Full name</Label><Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} /></div>
           <div><Label>Username</Label><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></div>
