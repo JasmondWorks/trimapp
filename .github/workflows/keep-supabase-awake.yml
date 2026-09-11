@@ -1,0 +1,60 @@
+# Keeps the Supabase project from auto-pausing.
+#
+# Free-tier projects pause after 7 days without API activity, and a paused
+# project takes the whole app down: its hostname stops resolving, so every
+# server action fails with "fetch failed".
+#
+# The ping has to come from outside Supabase. pg_cron runs *inside* the
+# database, so a paused project could never wake itself, and internal database
+# activity does not count towards the inactivity timer — only API requests do.
+#
+# This is a workaround for the free tier, not a fix. It does nothing if the
+# project was paused for exceeding usage limits, and GitHub disables scheduled
+# workflows in repositories with no commits for 60 days (it emails first). The
+# durable answer is upgrading the organisation to Pro.
+name: Keep Supabase awake
+
+on:
+  schedule:
+    # 06:00 UTC every third day — comfortably inside the 7-day window, with
+    # room for GitHub's scheduler to run late under load.
+    - cron: "0 6 */3 * *"
+  # So you can confirm it works without waiting three days.
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping the Supabase REST API
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_PUBLISHABLE_KEY}" ]; then
+            echo "::error::Set the SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY repository secrets."
+            exit 1
+          fi
+
+          # A tiny read against a table that is public to anon. Any authenticated
+          # API request resets the timer; this one also proves RLS still serves
+          # the catalogue, so a red run means something real.
+          code=$(curl -s -o /tmp/body -w '%{http_code}' --max-time 30 \
+            "${SUPABASE_URL}/rest/v1/vendors?select=id&limit=1" \
+            -H "apikey: ${SUPABASE_PUBLISHABLE_KEY}")
+
+          echo "HTTP ${code}"
+          head -c 200 /tmp/body || true
+          echo
+
+          # Fail loudly rather than pinging into the void: a paused project
+          # returns a connection error (000) and a revoked key returns 401.
+          if [ "${code}" != "200" ]; then
+            echo "::error::Supabase did not return 200 — the project may be paused or the key rotated."
+            exit 1
+          fi
+
+          echo "Project is awake."
